@@ -26,13 +26,13 @@
 /** Define PCA9685_DEVICE_ADDRESSES to the array of I2C addresses on which a
  *  PCA9685 is located. Individual PWM channel numbers will be 0-15 on the
  *  first address in the array, 16-31 on the second, and so on. */
-#define PCA9685_DEVICE_ADDRESSES  {0xA1, 0xA2}
+#define PCA9685_DEVICE_ADDRESSES  {0xA4, 0xA6, 0xA8}
 
 /** Define PCA9685_OUTPUT_USED to an array of bitmasks of equal length as
  *  PCA9685_DEVICE_ADDRESSES. If a bit in the mask is set to 1, that means
  *  the LED output is enabled. If it is set to 0, then operations using this
  *  API will not take effect. */
-#define PCA9685_OUTPUT_USED       {0xFFFF, 0xFFFF}
+#define PCA9685_OUTPUT_USED       {0xFFFF, 0xFFFF, 0xFFFF}
 
 /** Define PCA9685_I2C_INSTANCE to the I2C instance to be used for communicating
  *  with the PCA9685 chain. This library expects the I2C peripheral to be set up

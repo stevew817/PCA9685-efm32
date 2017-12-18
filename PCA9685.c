@@ -33,16 +33,41 @@ bool PCA9685_init(void)
     .flags = I2C_FLAG_WRITE_WRITE
   };
 
+  I2C_TransferSeq_TypeDef transfer1 = {
+    .flags = I2C_FLAG_WRITE_WRITE
+  };
+
+  I2C_TransferSeq_TypeDef transfer2 = {
+    .flags = I2C_FLAG_WRITE_WRITE
+  };
+
   uint8_t reg = PCA9685_REG_MODE1;
-  uint8_t mode[2] = {0x21, 0x04}; // Set Auto-Increment on, enable all-call, totem-pole output 0 when off
+  uint8_t mode1 = 0x20; // Set Auto-Increment on, disable all-call
+  uint8_t reg2 = PCA9685_REG_MODE2;
+  uint8_t mode2 = 0x04; //totem output 0 when off
 
   transfer.buf[0].data = &reg;
   transfer.buf[0].len = 1;
-  transfer.buf[1].data = mode;
-  transfer.buf[1].len = sizeof(mode);
+  transfer.buf[1].data = &mode1;
+  transfer.buf[1].len = 1;
+
+  transfer1.buf[0].data = &reg2;
+  transfer1.buf[0].len = 1;
+  transfer1.buf[1].data = &mode2;
+  transfer1.buf[1].len = 1;
+
+  uint8_t regpre = PCA9685_REG_PRESCALE;
+  uint8_t prescale = 0x04; // Set to maximum output frequency (better on the eyes)
+
+  transfer2.buf[0].data = &regpre;
+  transfer2.buf[0].len = 1;
+  transfer2.buf[1].data = &prescale;
+  transfer2.buf[1].len = 1;
 
   for(unsigned int i = 0; i < sizeof(device_chain); i++) {
     transfer.addr = device_chain[i];
+    transfer1.addr = device_chain[i];
+    transfer2.addr = device_chain[i];
 
     ret = I2C_TransferInit(PCA9685_I2C_INSTANCE, &transfer);
     while (ret == i2cTransferInProgress)
@@ -50,8 +75,16 @@ bool PCA9685_init(void)
       ret = I2C_Transfer(PCA9685_I2C_INSTANCE);
     }
 
-    if(ret != i2cTransferDone) {
-      return false;
+    ret = I2C_TransferInit(PCA9685_I2C_INSTANCE, &transfer1);
+    while (ret == i2cTransferInProgress)
+    {
+      ret = I2C_Transfer(PCA9685_I2C_INSTANCE);
+    }
+
+    ret = I2C_TransferInit(PCA9685_I2C_INSTANCE, &transfer2);
+    while (ret == i2cTransferInProgress)
+    {
+      ret = I2C_Transfer(PCA9685_I2C_INSTANCE);
     }
   }
 
@@ -62,9 +95,9 @@ bool PCA9685_write(uint32_t chno, uint16_t pwmvalue)
 {
   unsigned int devno = chno >> 4;
   uint8_t ch = chno & 0xF;
-  uint8_t reg = PCA9685_REG_LED_BASE + (chno * 4);
+  uint8_t reg = PCA9685_REG_LED_BASE + (ch * 4);
 
-  uint8_t values[4] = {(pwmvalue & 0xFF), ((pwmvalue >> 8) & 0xF), 0, 0}; /* Regulation is done with LED_ON = 0 and LED_OFF = PWM value */
+  uint8_t values[4] = {0, 0, (pwmvalue & 0xFF), ((pwmvalue >> 8) & 0xF)}; /* Regulation is done with LED_ON = 0 and LED_OFF = PWM value */
 
   I2C_TransferReturn_TypeDef ret;
   I2C_TransferSeq_TypeDef transfer = {
@@ -87,15 +120,24 @@ bool PCA9685_write(uint32_t chno, uint16_t pwmvalue)
     /* channel masked */
     return false;
   }
+  int retries = 3;
+  while (retries > 0) {
+    retries--;
+    ret = I2C_TransferInit(PCA9685_I2C_INSTANCE, &transfer);
+    unsigned int timeout = 30000;
+    while (ret == i2cTransferInProgress && timeout > 1)
+    {
+      timeout--;
+      ret = I2C_Transfer(PCA9685_I2C_INSTANCE);
+    }
 
-  ret = I2C_TransferInit(PCA9685_I2C_INSTANCE, &transfer);
-  while (ret == i2cTransferInProgress)
-  {
-    ret = I2C_Transfer(PCA9685_I2C_INSTANCE);
+    if(ret != i2cTransferDone) {
+    } else {
+      break;
+    }
   }
 
-  if(ret != i2cTransferDone) {
-    return false;
+  if(retries == 0) {
   }
 
   return true;
@@ -105,9 +147,9 @@ bool PCA9685_read(uint32_t chno, uint16_t *pwmvalue)
 {
   unsigned int devno = chno >> 4;
   uint8_t ch = chno & 0xF;
-  uint8_t reg = PCA9685_REG_LED_BASE + (chno * 4);
+  uint8_t reg = PCA9685_REG_LED_BASE + 2 + (ch * 4);
 
-  uint8_t values[4]; /* Regulation is done with LED_ON = 0 and LED_OFF = PWM value */
+  uint8_t values[2]; /* Regulation is done with LED_ON = 0 and LED_OFF = PWM value */
 
   I2C_TransferReturn_TypeDef ret;
   I2C_TransferSeq_TypeDef transfer = {
@@ -117,7 +159,7 @@ bool PCA9685_read(uint32_t chno, uint16_t *pwmvalue)
       {.data = &reg,
        .len = 1},
       {.data = values,
-       .len = 4},
+       .len = 2},
     }
   };
 
@@ -160,6 +202,7 @@ bool PCA9685_write_range(uint32_t chstart, uint32_t chend, uint16_t pwmvalue)
       return false;
     }
   }
+  return true;
 }
 
 bool PCA9685_sleep(bool sleep)
